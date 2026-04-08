@@ -189,8 +189,8 @@
               <div class="mt-5 space-y-4">
                 <div class="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
                   <div class="mb-3 h-[2px] w-full bg-gradient-to-r from-transparent via-accent to-transparent"></div>
-                  <div class="flex h-24 items-center justify-center rounded-xl border border-dashed border-white/20 bg-ink/35 text-sm text-white/75">
-                    Cinematic 2D Animations
+                  <div class="relative h-32 overflow-hidden rounded-xl border border-dashed border-white/20 bg-ink/35">
+                    <canvas class="js-network-canvas h-full w-full"></canvas>
                   </div>
                 </div>
                 <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -440,6 +440,220 @@
         duration: 900,
         easing: "ease-out-cubic",
       });
+
+      function initNetworkCanvas(canvas) {
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          return;
+        }
+
+        const container = canvas.parentElement;
+        const mouse = { x: 0, y: 0, active: false };
+        const drag = { node: null, x: 0, y: 0 };
+        const config = {
+          maxDistance: 130,
+          mouseDistance: 140,
+          minNodes: 14,
+          maxNodes: 42,
+        };
+
+        let dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+        let width = 0;
+        let height = 0;
+        let nodes = [];
+
+        container.style.touchAction = "none";
+
+        function clamp(value, min, max) {
+          return Math.min(max, Math.max(min, value));
+        }
+
+        function setPointerPosition(event) {
+          const rect = container.getBoundingClientRect();
+          mouse.x = event.clientX - rect.left;
+          mouse.y = event.clientY - rect.top;
+          mouse.active = true;
+          drag.x = clamp(mouse.x, 0, width);
+          drag.y = clamp(mouse.y, 0, height);
+        }
+
+        function createNodes() {
+          const targetCount = Math.max(
+            config.minNodes,
+            Math.min(config.maxNodes, Math.floor((width * height) / 14000))
+          );
+
+          nodes = Array.from({ length: targetCount }, () => ({
+            x: Math.random() * width,
+            y: Math.random() * height,
+            vx: (Math.random() - 0.5) * 0.35,
+            vy: (Math.random() - 0.5) * 0.35,
+            r: 1.5 + Math.random() * 1.6,
+          }));
+        }
+
+        function resizeCanvas() {
+          dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+          width = Math.max(1, container.clientWidth);
+          height = Math.max(1, container.clientHeight);
+
+          canvas.width = Math.floor(width * dpr);
+          canvas.height = Math.floor(height * dpr);
+          canvas.style.width = width + "px";
+          canvas.style.height = height + "px";
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+          createNodes();
+        }
+
+        function drawFrame() {
+          ctx.clearRect(0, 0, width, height);
+
+          for (let i = 0; i < nodes.length; i += 1) {
+            const n = nodes[i];
+
+            if (drag.node === n) {
+              n.x = drag.x;
+              n.y = drag.y;
+              n.vx = 0;
+              n.vy = 0;
+            }
+
+            if (mouse.active && drag.node !== n) {
+              const dxMouse = n.x - mouse.x;
+              const dyMouse = n.y - mouse.y;
+              const dMouse = Math.hypot(dxMouse, dyMouse);
+              if (dMouse > 0 && dMouse < 80) {
+                const force = (80 - dMouse) / 80;
+                n.vx += (dxMouse / dMouse) * force * 0.035;
+                n.vy += (dyMouse / dMouse) * force * 0.035;
+              }
+            }
+
+            if (drag.node !== n) {
+              n.x += n.vx;
+              n.y += n.vy;
+              n.vx *= 0.995;
+              n.vy *= 0.995;
+            }
+
+            if (n.x <= 0 || n.x >= width) {
+              n.vx *= -1;
+              n.x = Math.min(width, Math.max(0, n.x));
+            }
+            if (n.y <= 0 || n.y >= height) {
+              n.vy *= -1;
+              n.y = Math.min(height, Math.max(0, n.y));
+            }
+
+            ctx.beginPath();
+            ctx.fillStyle = "rgba(34, 211, 238, 0.88)";
+            ctx.shadowColor = "rgba(34, 211, 238, 0.55)";
+            ctx.shadowBlur = 8;
+            ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          for (let i = 0; i < nodes.length; i += 1) {
+            for (let j = i + 1; j < nodes.length; j += 1) {
+              const a = nodes[i];
+              const b = nodes[j];
+              const dx = a.x - b.x;
+              const dy = a.y - b.y;
+              const distance = Math.hypot(dx, dy);
+
+              if (distance < config.maxDistance) {
+                const alpha = Math.pow(1 - distance / config.maxDistance, 1.6) * 0.45;
+                ctx.beginPath();
+                ctx.strokeStyle = `rgba(34, 211, 238, ${alpha})`;
+                ctx.lineWidth = 1;
+                ctx.shadowBlur = 0;
+                ctx.moveTo(a.x, a.y);
+                ctx.lineTo(b.x, b.y);
+                ctx.stroke();
+              }
+            }
+          }
+
+          if (mouse.active) {
+            for (let i = 0; i < nodes.length; i += 1) {
+              const n = nodes[i];
+              const distance = Math.hypot(n.x - mouse.x, n.y - mouse.y);
+              if (distance < config.mouseDistance) {
+                const alpha = (1 - distance / config.mouseDistance) * 0.35;
+                ctx.beginPath();
+                ctx.strokeStyle = `rgba(125, 211, 252, ${alpha})`;
+                ctx.lineWidth = 1;
+                ctx.moveTo(n.x, n.y);
+                ctx.lineTo(mouse.x, mouse.y);
+                ctx.stroke();
+              }
+            }
+          }
+
+          requestAnimationFrame(drawFrame);
+        }
+
+        container.addEventListener("mousemove", (event) => {
+          setPointerPosition(event);
+        });
+
+        container.addEventListener("pointerdown", (event) => {
+          setPointerPosition(event);
+
+          let nearest = null;
+          let nearestDistance = Infinity;
+          for (let i = 0; i < nodes.length; i += 1) {
+            const n = nodes[i];
+            const distance = Math.hypot(n.x - mouse.x, n.y - mouse.y);
+            if (distance < nearestDistance && distance <= Math.max(10, n.r + 6)) {
+              nearest = n;
+              nearestDistance = distance;
+            }
+          }
+
+          if (nearest) {
+            drag.node = nearest;
+            nearest.vx = 0;
+            nearest.vy = 0;
+            container.setPointerCapture(event.pointerId);
+          }
+        });
+
+        container.addEventListener("pointermove", (event) => {
+          setPointerPosition(event);
+        });
+
+        function releaseDrag(event) {
+          drag.node = null;
+          if (event && event.pointerId !== undefined && container.hasPointerCapture(event.pointerId)) {
+            container.releasePointerCapture(event.pointerId);
+          }
+        }
+
+        container.addEventListener("pointerup", releaseDrag);
+        container.addEventListener("pointercancel", releaseDrag);
+        container.addEventListener("lostpointercapture", () => {
+          drag.node = null;
+        });
+
+        container.addEventListener("mouseleave", () => {
+          mouse.active = false;
+          drag.node = null;
+        });
+
+        if (window.ResizeObserver) {
+          const observer = new ResizeObserver(resizeCanvas);
+          observer.observe(container);
+        } else {
+          window.addEventListener("resize", resizeCanvas);
+        }
+
+        resizeCanvas();
+        requestAnimationFrame(drawFrame);
+      }
+
+      document.querySelectorAll(".js-network-canvas").forEach(initNetworkCanvas);
     </script>
   </body>
 </html>
