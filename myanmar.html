@@ -486,9 +486,10 @@
           nodes = Array.from({ length: targetCount }, () => ({
             x: Math.random() * width,
             y: Math.random() * height,
-            vx: (Math.random() - 0.5) * 0.35,
-            vy: (Math.random() - 0.5) * 0.35,
+            vx: (Math.random() - 0.5) * 0.4,
+            vy: (Math.random() - 0.5) * 0.4,
             r: 1.5 + Math.random() * 1.6,
+            maxSpeed: 0.34 + Math.random() * 0.2,
           }));
         }
 
@@ -520,10 +521,19 @@
             }
 
             if (drag.node !== n) {
+              n.vx += (Math.random() - 0.5) * 0.0095;
+              n.vy += (Math.random() - 0.5) * 0.0095;
+              n.maxSpeed += (Math.random() - 0.5) * 0.003;
+              n.maxSpeed = Math.min(0.62, Math.max(0.3, n.maxSpeed));
+              const speed = Math.hypot(n.vx, n.vy);
+              if (speed > n.maxSpeed) {
+                n.vx = (n.vx / speed) * n.maxSpeed;
+                n.vy = (n.vy / speed) * n.maxSpeed;
+              }
               n.x += n.vx;
               n.y += n.vy;
-              n.vx *= 0.995;
-              n.vy *= 0.995;
+              n.vx *= 0.999;
+              n.vy *= 0.999;
             }
 
             if (n.x <= 0 || n.x >= width) {
